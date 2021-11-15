@@ -56,6 +56,7 @@ catpag = do
 prodpag :: (DomBuilder t m , PostBuild t m, MonadHold t m) => m ()
 prodpag = do
   el "h1" (text "Pagina Produtos")
+  
 
 
 menu :: (DomBuilder t m, MonadHold t m) => m (Dynamic t Pagina)
