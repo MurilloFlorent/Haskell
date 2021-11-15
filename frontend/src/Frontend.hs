@@ -50,13 +50,14 @@ homepag = do
 
 catpag :: (DomBuilder t m , PostBuild t m, MonadHold t m) => m ()
 catpag = do
-  el "h1" (text "Pagina Categorias")
+  el "h1" (text "Pagina Categorias") 
+  el "span" (text "Pagina em construcao")
 
 
 prodpag :: (DomBuilder t m , PostBuild t m, MonadHold t m) => m ()
 prodpag = do
-  el "h1" (text "Pagina Produtos")
-  
+  el "h1" (text "Pagina Produtos") 
+  el "span" (text "Pagina em construcao")
 
 
 menu :: (DomBuilder t m, MonadHold t m) => m (Dynamic t Pagina)
