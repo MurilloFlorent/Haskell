@@ -22,6 +22,7 @@ import Data.Function
 import Obelisk.Route
 import Obelisk.Route.TH
 
+
 checFullREnc :: Encoder Identity Identity(R (FullRoute BackendRoute FrontendRoute))PageName
 checFullREnc = checkEncoder fullRouteEncoder &
   \case
@@ -30,9 +31,14 @@ checFullREnc = checkEncoder fullRouteEncoder &
 
 data BackendRoute :: * -> * where
   -- | Used to handle unparseable routes.
-
-  BackendRoute_Cliente :: BackendRoute ()
+ 
   BackendRoute_Missing :: BackendRoute ()
+  BackendRoute_Usuario :: BackendRoute ()
+  BackendRoute_Cliente :: BackendRoute ()
+  BackendRoute_ClienteListar :: BackendRoute ()
+  BackendRoute_Servicos :: BackendRoute ()
+  BackendRoute_Agendamento :: BackendRoute ()
+  
   -- You can define any routes that will be handled specially by the backend here.
   -- i.e. These do not serve the frontend, but do something different, such as serving static files.
 
@@ -47,6 +53,10 @@ fullRouteEncoder = mkFullRouteEncoder
   (\case
       BackendRoute_Missing -> PathSegment "missing" $ unitEncoder mempty
       BackendRoute_Cliente -> PathSegment "cliente" $ unitEncoder mempty
+      BackendRoute_Usuario -> PathSegment "usuario" $ unitEncoder mempty
+      BackendRoute_Servicos -> PathSegment "servicos" $ unitEncoder mempty
+      BackendRoute_Agendamento -> PathSegment "agendamento" $ unitEncoder mempty
+      BackendRoute_ClienteListar -> PathSegment "clienteListar" $ unitEncoder mempty
       )
   (\case
       FrontendRoute_Main -> PathEnd $ unitEncoder mempty)

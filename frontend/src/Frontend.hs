@@ -19,30 +19,34 @@ import Reflex.Dom.Core
 
 import Common.Api
 import Common.Route
+import Data.Aeson
 
 
 -- This runs in a monad that can be run on the client or the server.
 -- To run code in a pure client or pure server context, use one of the
 -- `prerender` functions.
+
+
 data Pagina = Principal | Categoria | Produtos | Pagina4
+getPath :: R BackendRoute ->  T.Text
+getPath r = renderBackendRoute checFullREnc r
 
-getPath :: T.Text
-getPath = renderBackendRoute checFullREnc $ BackendRoute_Cliente :/ ()
+sendRequest :: ToJSON a => R BackendRoute -> a -> XhrRequest T.Text
+sendRequest r dados = postJson (getPath r) dados
 
-nomeRequest :: T.Text -> XhrRequest T.Text
-nomeRequest s = postJson getPath  (Cliente s)
-
-req :: ( DomBuilder t m
+reqUsuario :: ( DomBuilder t m
         , Prerender js t m
         ) => m ()
-req = do
-  inputEl <- inputElement def
+reqUsuario = do
+  username <- inputElement def
+  senha <- inputElement def
+  let user = fmap (\(u,s) -> Usuario 0 u s) (zipDyn (_inputElement_value username)(_inputElement_value  senha))
   (submitBtn,_) <- el' "button" (text "Inserir")
   let click = domEvent Click submitBtn
-  let nm = tag (current $ _inputElement_value inputEl) click
+  let userEvt = tag (current user) click
   _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
       (pure never)
-      (fmap decodeXhrResponse <$> performRequestAsync (nomeRequest <$> nm))
+      (fmap decodeXhrResponse <$> performRequestAsync (sendRequest (BackendRoute_Usuario :/ ()) <$> userEvt ))
   return ()
 
 clickli :: DomBuilder t m => Pagina -> T.Text -> m (Event t Pagina)
@@ -56,17 +60,22 @@ currPag p =
     Principal -> blank
     Categoria -> catpag
     Produtos -> prodpag
-    Pagina4 -> req
+    Pagina4 -> reqUsuario
 
 homepag :: (DomBuilder t m , PostBuild t m, MonadHold t m, Prerender js t m) => m ()
 homepag = do
   pagina <- el "div" menu
-  el "ul" $ do
-    el "li" (text "Murillo Florentino")
-    el "li" (text "Rebeka Alexandra")
-    el "li" (text "Bruno Fontes")
-    el "li" (text "Rodrigo Hailer")
   dyn_ $ currPag <$> pagina
+  login
+
+login :: (DomBuilder t m , PostBuild t m, MonadHold t m, Prerender js t m) => m ()
+login = do
+  el "h1" (text "Login") 
+  el "label" (text "Username") 
+  username <- inputElement def
+  el "label" (text "Senha") 
+  senha <- inputElement def
+  text " "
 
 catpag :: (DomBuilder t m , PostBuild t m, MonadHold t m, Prerender js t m) => m ()
 catpag = do
