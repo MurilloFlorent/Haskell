@@ -5,21 +5,20 @@
 module Frontend where
 
 import Control.Monad
+import Data.Maybe
+import Text.Read (readMaybe)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import Language.Javascript.JSaddle (eval, liftJSM)
 
+import Control.Monad.Fix (MonadFix)
 import Obelisk.Frontend
 import Obelisk.Configs
 import Obelisk.Route
 import Obelisk.Generated.Static
-import Control.Monad
-
+import Data.Aeson
 import Reflex.Dom.Core
 
 import Common.Api
 import Common.Route
-import Data.Aeson
 
 
 -- This runs in a monad that can be run on the client or the server.
@@ -27,7 +26,7 @@ import Data.Aeson
 -- `prerender` functions.
 
 
-data Pagina = Principal | Categoria | Produtos | Pagina4
+data Pagina = Principal | Categoria | Produtos | Pagina4 | InsertCli | InsertServ
 getPath :: R BackendRoute ->  T.Text
 getPath r = renderBackendRoute checFullREnc r
 
@@ -49,6 +48,36 @@ reqUsuario = do
       (fmap decodeXhrResponse <$> performRequestAsync (sendRequest (BackendRoute_Usuario :/ ()) <$> userEvt ))
   return ()
 
+reqCliente :: (DomBuilder t m, Prerender js t m) => m ()
+reqCliente = do
+  nome <- inputElement def
+  telefone <- inputElement def
+  cpf <- inputElement def
+  endereco <- inputElement def
+  let cliente = fmap (\((n,t),(c,e)) -> Cliente  1 0 n t c e) (zipDyn (zipDyn (_inputElement_value nome)(_inputElement_value telefone)) (zipDyn (_inputElement_value cpf)(_inputElement_value endereco)))
+  (submitBtn,_) <- el' "button" (text "Inserir")
+  let click = domEvent Click submitBtn
+  let clienteEvt = tag (current cliente) click
+  _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
+      (pure never)
+      (fmap decodeXhrResponse <$> performRequestAsync (sendRequest (BackendRoute_Cliente :/ ()) <$> clienteEvt ))
+  return()
+
+reqServicos :: (DomBuilder t m, Prerender js t m) => m ()
+reqServicos = do 
+  servico <- inputElement def
+  valor <- numberInput
+  let serv = fmap (\(s,v) -> Servicos 1 0 s v) (zipDyn (_inputElement_value servico)valor)
+  (submitBtn,_) <- el' "button" (text "Inserir")
+  let click = domEvent Click submitBtn
+  let servicoEvt = tag (current serv) click
+  _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
+      (pure never)
+      (fmap decodeXhrResponse <$> performRequestAsync (sendRequest (BackendRoute_Servicos :/ ()) <$> servicoEvt ))
+  return()
+
+
+
 clickli :: DomBuilder t m => Pagina -> T.Text -> m (Event t Pagina)
 clickli p t = do
   (ev, _) <- elAttr' "li" ("class" =: "nav-item") (elAttr "a" ("href" =: "#" <> "class" =: "nav-link") (text t))
@@ -61,12 +90,13 @@ currPag p =
     Categoria -> catpag
     Produtos -> prodpag
     Pagina4 -> reqUsuario
+    InsertCli -> reqCliente
+    InsertServ -> reqServicos
 
 homepag :: (DomBuilder t m , PostBuild t m, MonadHold t m, Prerender js t m) => m ()
 homepag = do
   pagina <- el "div" menu
   dyn_ $ currPag <$> pagina
-  login
 
 login :: (DomBuilder t m , PostBuild t m, MonadHold t m, Prerender js t m) => m ()
 login = do
@@ -103,9 +133,17 @@ menu = do
             p2 <- clickli Categoria "Categoria"
             p3 <- clickli Produtos "Produtos"
             p4 <- clickli Pagina4 "Insercao banco"
-            return (leftmost [p1,p2,p3,p4])
+            p5 <- clickli InsertCli "Inserir Cliente"
+            p6 <- clickli InsertServ "Inserir Servicos"
+            return (leftmost [p1,p2,p3,p4,p5,p6])
   holdDyn Principal evs
 
+numberInput :: (Read a, Num a) => DomBuilder t m => m (Dynamic t a)
+numberInput = do
+      n <- inputElement $ def
+        & inputElementConfig_initialValue .~ "0"
+        & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("type" =: "number")
+      return $ fmap (fromMaybe 0 . readMaybe . T.unpack) $ _inputElement_value n
 
       
 
