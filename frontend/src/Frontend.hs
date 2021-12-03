@@ -26,27 +26,69 @@ import Common.Route
 -- `prerender` functions.
 
 
-data Pagina = Principal | Categoria | Produtos | Pagina4 | InsertCli | InsertServ
+data Pagina = Principal | Usuarios | Clientes | ServicosPag | InsertUser | InsertCli | InsertServ
+data Acao = Perfil Int | Editar Int
+
+
 getPath :: R BackendRoute ->  T.Text
 getPath r = renderBackendRoute checFullREnc r
 
 sendRequest :: ToJSON a => R BackendRoute -> a -> XhrRequest T.Text
 sendRequest r dados = postJson (getPath r) dados
 
+getClienteListReq :: XhrRequest ()
+getClienteListReq = xhrRequest "GET" (getPath (BackendRoute_ClienteListar :/ ())) def
+
+getServiceListReq :: XhrRequest ()
+getServiceListReq = xhrRequest "GET" (getPath (BackendRoute_ServicosListar :/ ())) def
+
+getUserListReq :: XhrRequest ()
+getUserListReq = xhrRequest "GET" (getPath (BackendRoute_UsuarioListar :/ ())) def
+
+getClienteReq :: Int -> XhrRequest()
+getClienteReq pid = xhrRequest "GET" (getPath (BackendRoute_Buscar :/ pid)) def
+
+
+reqLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => m ()
+reqLista = do
+  r <- workflow reqClienteLista
+  el "div" (dynText r)
+
+
+pagPerfil :: ( DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
+pagPerfil pid = Workflow $ do
+  (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Listar")
+  let click = domEvent Click btn
+  prod :: Dynamic t (Event t (Maybe Cliente)) <- prerender
+    (pure never)
+    (fmap decodeXhrResponse <$> performRequestAsync (const (getClienteReq pid) <$> btn))
+  mdyn <- holdDyn Nothing (switchDyn prod)
+  dynCli <- return ((fromMaybe (Cliente 1 0 "" "" "" "")) <$> mdyn)
+  el "div" $ do
+    el "div" (dynText $ fmap clienteNome dynCli)
+    el "div" (dynText $ fmap clienteTelefone dynCli)
+    el "div" (dynText $ fmap clienteCpf dynCli)
+    el "div" (dynText $ fmap clienteEndereco dynCli)
+  ret <- button "voltar"
+  return ("Perfil: " <> (T.pack $ show pid), reqClienteLista <$ ret)
+
 reqUsuario :: ( DomBuilder t m
         , Prerender js t m
         ) => m ()
 reqUsuario = do
-  username <- inputElement def
-  senha <- inputElement def
-  let user = fmap (\(u,s) -> Usuario 0 u s) (zipDyn (_inputElement_value username)(_inputElement_value  senha))
-  (submitBtn,_) <- el' "button" (text "Inserir")
-  let click = domEvent Click submitBtn
-  let userEvt = tag (current user) click
-  _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
-      (pure never)
-      (fmap decodeXhrResponse <$> performRequestAsync (sendRequest (BackendRoute_Usuario :/ ()) <$> userEvt ))
-  return ()
+  elAttr "div" ("class" =: "d-flex flex-column col-4") $ do
+    el "label" (text "Usuario") 
+    username <- inputElement def
+    el "label" (text "Senha") 
+    senha <- inputElement def
+    let user = fmap (\(u,s) -> Usuario 0 u s) (zipDyn (_inputElement_value username)(_inputElement_value  senha))
+    (submitBtn,_) <- elAttr' "button" ("class" =: "btn btn-primary mt-2") (text "Inserir")
+    let click = domEvent Click submitBtn
+    let userEvt = tag (current user) click
+    _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
+        (pure never)
+        (fmap decodeXhrResponse <$> performRequestAsync (sendRequest (BackendRoute_Usuario :/ ()) <$> userEvt ))
+    return ()
 
 reqCliente :: (DomBuilder t m, Prerender js t m) => m ()
 reqCliente = do
@@ -64,36 +106,121 @@ reqCliente = do
   return()
 
 reqServicos :: (DomBuilder t m, Prerender js t m) => m ()
-reqServicos = do 
-  servico <- inputElement def
-  valor <- numberInput
-  let serv = fmap (\(s,v) -> Servicos 1 0 s v) (zipDyn (_inputElement_value servico)valor)
+reqServicos = do
+  serv <- inputElement def
+  vl <- numberInput
+  let servi = fmap(\(s,v) -> Servicos 1 0 s v) (zipDyn (_inputElement_value serv)  vl)
   (submitBtn,_) <- el' "button" (text "Inserir")
   let click = domEvent Click submitBtn
-  let servicoEvt = tag (current serv) click
+  let servicosEvt = tag (current servi) click
   _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
       (pure never)
-      (fmap decodeXhrResponse <$> performRequestAsync (sendRequest (BackendRoute_Servicos :/ ()) <$> servicoEvt ))
+      (fmap decodeXhrResponse <$> performRequestAsync (sendRequest(BackendRoute_Servicos :/ ()) <$> servicosEvt ))
   return()
 
+tabCliente :: (PostBuild t m, DomBuilder t m) => Dynamic t Cliente -> m (Event t Acao)
+tabCliente cl = do
+  el "tr" $ do
+    el "td" (dynText $ fmap clienteNome cl)
+    el "td" (dynText $ fmap clienteTelefone cl)
+    el "td" (dynText $ fmap clienteCpf cl)
+    el "td" (dynText $ fmap clienteEndereco cl)
+    evt <- fmap (fmap (const Perfil)) (button "perfil")
+    return (attachPromptlyDynWith (flip ($)) (fmap codigoCliente cl) evt)
 
+reqClienteLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Workflow t m T.Text
+reqClienteLista = Workflow $ do
+  elAttr "div" ("class" =: "col-6 d-flex justify-content-center flex-column") $ do
+    (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Listar")
+    let click = domEvent Click btn
+    clients :: Dynamic t (Event t (Maybe [Cliente])) <- prerender
+      (pure never)
+      (fmap decodeXhrResponse <$> performRequestAsync (const getClienteListReq <$> click))
+    evt <- return (fmap (fromMaybe []) $ switchDyn clients)
+    dynCli <- foldDyn (++) [] evt
+    elAttr "table" ("class" =: "table") $ do
+      el "thead" $ do
+        el "tr" $ do
+          elAttr "th" ("scope" =: "col") (text "Nome")
+          elAttr "th" ("scope" =: "col") (text "Telefone")
+          elAttr "th" ("scope" =: "col") (text "CPF")
+          elAttr "th" ("scope" =: "col") (text "Endereco")
+          elAttr "th" ("scope" =: "col") (text "Atualizar")
+
+      el "tbody" $ do
+        simpleList dynCli tabCliente
+    tb' <- return $ switchDyn $ fmap leftmost tb
+    return ("Listagem", escolherPag <$> tb')
+    where
+      escolherPag (Perfil pid) = pagPerfil pid
+
+tabServicos :: DomBuilder t m => Servicos -> m ()
+tabServicos sr = do
+  el "tr" $ do
+    el "td" (text $ servico sr)
+    el "td" (text $ T.pack $ show $  valor sr)
+
+reqServicoLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => m ()
+reqServicoLista = do
+  (btn,_) <- el' "button" (text "Listar")
+  let click = domEvent Click btn
+  services :: Dynamic t (Event t (Maybe [Servicos])) <- prerender
+    (pure never)
+    (fmap decodeXhrResponse <$> performRequestAsync (const getServiceListReq <$> click))
+  dynServ <- foldDyn (\ps d -> case ps of 
+                                Nothing -> []
+                                Just s -> d++s) [] (switchDyn services )
+  elAttr "table" ("class" =: "table") $ do
+    el "thead" $ do
+      el "tr" $ do
+        elAttr "th" ("scope" =: "col") (text "Servico")
+        elAttr "th" ("scope" =: "col") (text "valor")
+
+    el "tbody" $ do
+      dyn_ (fmap sequence (ffor dynServ (fmap tabServicos)))
+
+tabUsuario :: DomBuilder t m => Usuario -> m ()
+tabUsuario us = do
+  el "tr" $ do
+    el "td" (text $ usuarioUsername us)
+    el "td" (text $ usuarioSenha us)
+
+reqUsuarioLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => m ()
+reqUsuarioLista = do
+  (btn,_) <- el' "button" (text "Listar")
+  let click = domEvent Click btn
+  users :: Dynamic t (Event t (Maybe [Usuario])) <- prerender
+    (pure never)
+    (fmap decodeXhrResponse <$> performRequestAsync (const getUserListReq <$> click))
+  dynUser <- foldDyn (\ps d -> case ps of 
+                                Nothing -> []
+                                Just s -> d++s) [] (switchDyn users )
+  elAttr "table" ("class" =: "table") $ do
+    el "thead" $ do
+      el "tr" $ do
+        elAttr "th" ("scope" =: "col") (text "Usuario")
+        elAttr "th" ("scope" =: "col") (text "Senha")
+
+    el "tbody" $ do
+      dyn_ (fmap sequence (ffor dynUser (fmap tabUsuario)))
 
 clickli :: DomBuilder t m => Pagina -> T.Text -> m (Event t Pagina)
 clickli p t = do
   (ev, _) <- elAttr' "li" ("class" =: "nav-item") (elAttr "a" ("href" =: "#" <> "class" =: "nav-link") (text t))
   return ((\_ -> p) <$> domEvent Click ev)
 
-currPag :: (DomBuilder t m, PostBuild t m, MonadHold t m, Prerender js t m) => Pagina -> m ()
+currPag :: (DomBuilder t m, MonadHold t m, PostBuild t m, MonadFix m, Prerender js t m) => Pagina -> m ()
 currPag p = 
   case p of
     Principal -> blank
-    Categoria -> catpag
-    Produtos -> prodpag
-    Pagina4 -> reqUsuario
+    Usuarios -> reqUsuarioLista
+    Clientes -> reqClienteLista
+    ServicosPag -> reqServicoLista
+    InsertUser -> reqUsuario
     InsertCli -> reqCliente
     InsertServ -> reqServicos
 
-homepag :: (DomBuilder t m , PostBuild t m, MonadHold t m, Prerender js t m) => m ()
+homepag :: (DomBuilder t m , PostBuild t m, MonadHold t m,MonadFix m, Prerender js t m) => m ()
 homepag = do
   pagina <- el "div" menu
   dyn_ $ currPag <$> pagina
@@ -130,12 +257,13 @@ menu = do
         elAttr "div" ("class" =: "collapse navbar-collapse" <> "id" =: "navbarSupporedContent") $ do
           elAttr "ul" ("class" =: "navbar-nav me-auto mb-2 mb-lg-0") $ do
             p1 <- clickli Principal "Teste da Home"
-            p2 <- clickli Categoria "Categoria"
-            p3 <- clickli Produtos "Produtos"
-            p4 <- clickli Pagina4 "Insercao banco"
+            pu <- clickli Usuarios "Usuarios"
+            p2 <- clickli Clientes "Clientes"
+            p3 <- clickli ServicosPag "Servicos"
+            p4 <- clickli InsertUser "Inserir Usuario"
             p5 <- clickli InsertCli "Inserir Cliente"
             p6 <- clickli InsertServ "Inserir Servicos"
-            return (leftmost [p1,p2,p3,p4,p5,p6])
+            return (leftmost [p1,pu,p2,p3,p4,p5,p6])
   holdDyn Principal evs
 
 numberInput :: (Read a, Num a) => DomBuilder t m => m (Dynamic t a)
@@ -165,5 +293,10 @@ frontend = Frontend
       elAttr "script" ("href" =: "https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"
                     <> "integrity" =: "sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" 
                     <> "crossorigin" =:"anonymous") blank
-  , _frontend_body = homepag
+  , _frontend_body = do
+      homepag
+
+      elAttr "script" ("href" =: "https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"
+                    <> "integrity" =: "sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" 
+                    <> "crossorigin" =:"anonymous") blank
   }
