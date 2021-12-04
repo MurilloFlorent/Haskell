@@ -47,6 +47,24 @@ backend = Backend
                         writeLazyText (encodeToLazyText (Prelude.head res))
                 else 
                         modifyResponse $ setResponseStatus 404 "NOT FOUND"
+            BackendRoute_ServicosBuscar :/ pid -> do
+                res :: [Servicos] <- liftIO $ do
+                        execute_ dbcon migrationCliente
+                        query dbcon "SELECT * FROM tb_servicos where codigoServico = ?" (Only (pid :: Int))
+                if res /= [] then do
+                        modifyResponse $ setResponseStatus 200 "OK"   
+                        writeLazyText (encodeToLazyText (Prelude.head res))
+                else 
+                        modifyResponse $ setResponseStatus 404 "NOT FOUND"
+            BackendRoute_ServicosEditar :/ pid -> do
+                serv <- A.decode <$> readRequestBody 2000
+                case serv of
+                  Just servicos -> do
+                    liftIO $ do
+                      execute_ dbcon migrationCliente
+                      execute dbcon "UPDATE tb_servicos SET servico= ?,valor=? WHERE  codigoServico = ?" (servico servicos, valor servicos, pid)
+                    modifyResponse $ setResponseStatus 200 "OK"
+                  Nothing -> modifyResponse $ setResponseStatus 500 "ERROR"  
             BackendRoute_ClienteEditar :/ pid -> do
                 client <- A.decode <$> readRequestBody 2000
                 case client of

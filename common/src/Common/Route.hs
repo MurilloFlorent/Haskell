@@ -42,7 +42,8 @@ data BackendRoute :: * -> * where
   BackendRoute_Agendamento :: BackendRoute ()
   BackendRoute_ClienteBuscar :: BackendRoute Int
   BackendRoute_ClienteEditar :: BackendRoute Int
-
+  BackendRoute_ServicosBuscar :: BackendRoute Int
+  BackendRoute_ServicosEditar :: BackendRoute Int
   
   -- You can define any routes that will be handled specially by the backend here.
   -- i.e. These do not serve the frontend, but do something different, such as serving static files.
@@ -66,6 +67,8 @@ fullRouteEncoder = mkFullRouteEncoder
       BackendRoute_UsuarioListar -> PathSegment "usuarioListar" $ unitEncoder mempty
       BackendRoute_ClienteBuscar -> PathSegment "clienteBuscar" readShowEncoder
       BackendRoute_ClienteEditar -> PathSegment "clienteEditar" readShowEncoder
+      BackendRoute_ServicosBuscar -> PathSegment "servicosBuscar" readShowEncoder
+      BackendRoute_ServicosEditar -> PathSegment "servicosEditar" readShowEncoder
       )
   (\case
       FrontendRoute_Main -> PathEnd $ unitEncoder mempty)
