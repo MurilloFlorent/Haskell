@@ -38,15 +38,24 @@ backend = Backend
       dbcon <- connect getConn
       serve $ do
         \case
-            BackendRoute_Buscar :/ pid -> method GET $ do
-              res :: [Cliente] <- liftIO $ do
-                execute_ dbcon migrationCliente
-                query dbcon "SELECT * from tb_cliente where codigoCliente=?"(Only (pid :: Int))
-              if res /= [] then do
-                modifyResponse setResponseStatus 200 "OK"
-                writeLazyText (encodeToLazyText (Prelude.head res))
-              else
-                modifyResponse $ setResponseStatus 404 "NOT FOUND"
+            BackendRoute_ClienteBuscar :/ pid -> do
+                res :: [Cliente] <- liftIO $ do
+                        execute_ dbcon migrationCliente
+                        query dbcon "SELECT * FROM tb_cliente where codigoCliente = ?" (Only (pid :: Int))
+                if res /= [] then do
+                        modifyResponse $ setResponseStatus 200 "OK"   
+                        writeLazyText (encodeToLazyText (Prelude.head res))
+                else 
+                        modifyResponse $ setResponseStatus 404 "NOT FOUND"
+            BackendRoute_ClienteEditar :/ pid -> do
+                client <- A.decode <$> readRequestBody 2000
+                case client of
+                  Just cliente -> do
+                    liftIO $ do
+                      execute_ dbcon migrationCliente
+                      execute dbcon "UPDATE tb_cliente SET nome = ?,  telefone= ?, cpf= ?, endereco=? WHERE  codigoCliente = ?" (clienteNome cliente, clienteTelefone cliente, clienteCpf cliente, clienteEndereco cliente, pid)
+                    modifyResponse $ setResponseStatus 200 "OK"
+                  Nothing -> modifyResponse $ setResponseStatus 500 "ERROR"  
             BackendRoute_UsuarioListar :/ () -> method GET $ do
               res :: [Usuario] <- liftIO $ do
                 execute_ dbcon migrationUsuario
