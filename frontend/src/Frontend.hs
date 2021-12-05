@@ -26,8 +26,8 @@ import Common.Route
 -- `prerender` functions.
 
 
-data Pagina = Principal | Usuarios | Clientes | ServicosPag | InsertUser | InsertCli | InsertServ
-data Acao = PerfilCliente Int | EditarCliente Int | PerfilServico Int | EditarServico Int
+data Pagina = Principal | Usuarios | Clientes | AgendamentoPag | InsertUser | InsertCli | InsertServ
+data Acao = PerfilCliente Int | EditarCliente Int | PerfilServico Int | EditarServico Int | Excluir Int
 
 
 getPath :: R BackendRoute ->  T.Text
@@ -39,8 +39,9 @@ sendRequest r dados = postJson (getPath r) dados
 getClienteListReq :: XhrRequest ()
 getClienteListReq = xhrRequest "GET" (getPath (BackendRoute_ClienteListar :/ ())) def
 
-getServiceListReq :: XhrRequest ()
-getServiceListReq = xhrRequest "GET" (getPath (BackendRoute_ServicosListar :/ ())) def
+
+getListReq :: XhrRequest ()
+getListReq = xhrRequest "GET" (getPath (BackendRoute_ServicosListar :/ ())) def
 
 getUserListReq :: XhrRequest ()
 getUserListReq = xhrRequest "GET" (getPath (BackendRoute_UsuarioListar :/ ())) def
@@ -48,8 +49,14 @@ getUserListReq = xhrRequest "GET" (getPath (BackendRoute_UsuarioListar :/ ())) d
 getClienteReq :: Int -> XhrRequest()
 getClienteReq pid = xhrRequest "GET" (getPath (BackendRoute_ClienteBuscar :/ pid)) def
 
-getServicosReq :: Int -> XhrRequest()
-getServicosReq pid = xhrRequest "GET" (getPath (BackendRoute_ServicosBuscar :/ pid)) def
+getExcluirCliente :: Int -> XhrRequest()
+getExcluirCliente pid = xhrRequest "GET" (getPath (BackendRoute_ClienteDeletar :/ pid)) def
+
+getExcluirAgendamento :: Int -> XhrRequest()
+getExcluirAgendamento pid = xhrRequest "GET" (getPath (BackendRoute_ServicosDeletar :/ pid)) def
+
+getAgendamentosReq :: Int -> XhrRequest()
+getAgendamentosReq pid = xhrRequest "GET" (getPath (BackendRoute_ServicosBuscar :/ pid)) def
 
 
 editarPerfilCliente :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
@@ -70,7 +77,7 @@ editarPerfilCliente pid = Workflow $ do
     el "label" (text "Cpf")
     cpf <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteCpf dynE)
     el "label" (text "Endereco")
-    endereco <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteEndereco dynE)
+    endereco <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteEndereco dynE) 
   
     let cliente = fmap (\((n,t),(c,e)) -> Cliente  1 0 n t c e) (zipDyn (zipDyn (_inputElement_value nome)(_inputElement_value telefone)) (zipDyn (_inputElement_value cpf)(_inputElement_value endereco)))
     (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Editar")
@@ -83,9 +90,134 @@ editarPerfilCliente pid = Workflow $ do
               <$> clientEvt))
 
     return ("Editar: " <> (T.pack $ show pid), reqClienteLista <$ submitBtn)  
-    where
 
+pagAgendar :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
+pagAgendar pid = Workflow $ do
+  elAttr "div" ("class" =: "ml-5") $ do
+    (btn,_) <- elAttr' "button" ("class" =: "btn btn-primary" <> "style" =: "background: #0d6efd;") (text "Mostrar")
+    elAttr "p" ("style" =: "font-size:12px;") (text "(Clique no Mostrar para conseguir agendar)")
 
+    let evt = domEvent Click btn
+    cli :: Dynamic t (Event t (Maybe Cliente)) <- prerender
+      (pure never)
+      (fmap decodeXhrResponse <$> performRequestAsync (const (getClienteReq pid) <$> evt))
+    mdyn <- return (switchDyn cli)
+    dynE <- return ((fromMaybe (Cliente 1 0 "" "" "" "")) <$> mdyn)
+
+    elAttr "div" ("class" =: "col-3 d-flex flex-column") $ do
+      el "label" (text "Nome")
+      nome <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteNome dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+      el "label" (text "Telefone")
+      telefone <-  inputElement $ def & inputElementConfig_setValue .~ (fmap clienteTelefone dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+      el "label" (text "Cpf")
+      cpf <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteCpf dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+      el "label" (text "Endereco")
+      endereco <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteEndereco dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+      id <- numberInputDisable (fmap codigoCliente dynE)
+        
+      elAttr "div" ("class" =: "col-6 d-flex flex-column") $ do
+        el "h3" (text "Agendamento")
+        el "label" (text "Servico")
+        serv <- inputElement def
+        el "label" (text "Valor")
+        vl <- numberInput
+        el "label" (text "Data do Servico")
+        date <- inputElement $ def & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("type" =: "date")
+          
+
+        let agend = fmap (\((s,v),(d,i))  -> Servicos  1 0 s v d i) (zipDyn  (zipDyn (_inputElement_value serv) (vl))  (zipDyn (_inputElement_value date)(id)))  
+        (btn,_) <- elAttr' "button" ("class" =: "btn btn-success mt-3") (text "Agendar")
+        let submitBtn = domEvent Click btn
+        let clientEvt = tag (current agend) submitBtn
+        _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
+          (pure never)
+          (fmap decodeXhrResponse <$>
+                  performRequestAsync (sendRequest (BackendRoute_Servicos :/ ())
+                  <$> clientEvt))
+        
+        return ("Editar: " <> (T.pack $ show pid), reqAgendamentoLista <$ submitBtn) 
+
+pagPerfilCliente :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
+pagPerfilCliente pid = Workflow $ do
+  (btn,_) <- elAttr' "button" ("class" =: "btn btn-primary" <> "style" =: "background: #0d6efd;") (text "Mostrar")
+  let evt = domEvent Click btn
+  cli :: Dynamic t (Event t (Maybe Cliente)) <- prerender
+    (pure never)
+    (fmap decodeXhrResponse <$> performRequestAsync (const (getClienteReq pid) <$> evt))
+  mdyn <- return (switchDyn cli)
+  dynE <- return ((fromMaybe (Cliente 1 0 "" "" "" "")) <$> mdyn)
+
+  elAttr "div" ("class" =: "col-3 d-flex flex-column") $ do
+    el "label" (text "Nome")
+    nome <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteNome dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+    el "label" (text "Telefone")
+    telefone <-  inputElement $ def & inputElementConfig_setValue .~ (fmap clienteTelefone dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+    el "label" (text "Cpf")
+    cpf <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteCpf dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+    el "label" (text "Endereco")
+    endereco <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteEndereco dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+    id <- numberInputDisable (fmap codigoCliente dynE)   
+    
+    (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Voltar")
+    let submitBtn = domEvent Click btn
+
+    return ("Voltar: " <> (T.pack $ show pid), reqAgendamentoLista <$ submitBtn)  
+
+pagPerfilClienteAgendamento :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
+pagPerfilClienteAgendamento pid = Workflow $ do
+  (btn,_) <- elAttr' "button" ("class" =: "btn btn-primary" <> "style" =: "background: #0d6efd;") (text "Mostrar")
+  let evt = domEvent Click btn
+  cli :: Dynamic t (Event t (Maybe Cliente)) <- prerender
+    (pure never)
+    (fmap decodeXhrResponse <$> performRequestAsync (const (getAgendamentosReq pid) <$> evt))
+  mdyn <- return (switchDyn cli)
+  dynE <- return ((fromMaybe (Cliente 1 0 "" "" "" "")) <$> mdyn)
+
+  elAttr "div" ("class" =: "col-3 d-flex flex-column") $ do
+    el "label" (text "Nome")
+    nome <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteNome dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+    el "label" (text "Telefone")
+    telefone <-  inputElement $ def & inputElementConfig_setValue .~ (fmap clienteTelefone dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+    el "label" (text "Cpf")
+    cpf <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteCpf dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+    el "label" (text "Endereco")
+    endereco <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteEndereco dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
+    id <- numberInputDisable (fmap codigoCliente dynE)   
+    
+    (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Voltar")
+    let submitBtn = domEvent Click btn
+
+    return ("Voltar: " <> (T.pack $ show pid), reqAgendamentoLista <$ submitBtn)  
+
+pagExcluirCliente :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
+pagExcluirCliente pid = Workflow $ do
+  (btn,_) <- elAttr' "button" ("class" =: "btn btn-danger" <> "style" =: "background: #dc3545;") (text "Excluir")
+  let evt = domEvent Click btn
+  cli :: Dynamic t (Event t (Maybe Cliente)) <- prerender
+    (pure never)
+    (fmap decodeXhrResponse <$> performRequestAsync (const (getExcluirCliente pid) <$> evt))
+  
+    
+    
+  (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Voltar")
+  let submitBtn = domEvent Click btn
+
+  return ("Voltar: " <> (T.pack $ show pid), reqAgendamentoLista <$ submitBtn)  
+
+pagExcluirAgendamento :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
+pagExcluirAgendamento pid = Workflow $ do
+  (btn,_) <- elAttr' "button" ("class" =: "btn btn-danger" <> "style" =: "background: #dc3545;") (text "Excluir")
+  let evt = domEvent Click btn
+  cli :: Dynamic t (Event t (Maybe Cliente)) <- prerender
+    (pure never)
+    (fmap decodeXhrResponse <$> performRequestAsync (const (getExcluirAgendamento pid) <$> evt))
+  
+    
+    
+  (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Voltar")
+  let submitBtn = domEvent Click btn
+
+  return ("Voltar: " <> (T.pack $ show pid), reqAgendamentoLista <$ submitBtn)  
 
 reqListaClient :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => m ()
 reqListaClient = do
@@ -93,31 +225,6 @@ reqListaClient = do
   el "div" (dynText r)
 
 
-pagPerfilCliente :: ( DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
-pagPerfilCliente pid = Workflow $ do
-  (btn,_) <- elAttr' "button" ("class" =: "btn btn-primary" <> "style" =: "background: #0d6efd;") (text "Mostrar")
-  let evt = domEvent Click btn
-  prod :: Dynamic t (Event t (Maybe Cliente)) <- prerender
-    (pure never)
-    (fmap decodeXhrResponse <$> performRequestAsync (const (getClienteReq pid) <$> evt))
-  mdyn <- holdDyn Nothing (switchDyn prod)
-  dynCli <- return ((fromMaybe (Cliente 1 0 "" "" "" "")) <$> mdyn)
-  el "div" $ do
-    elAttr "div" ("class" =: "d-flex flex-row align-items-center") $ do
-      el "h5" (text "Nome:")
-      el "h5" (dynText $ fmap clienteNome dynCli)
-    elAttr "div" ("class" =: "d-flex flex-row align-items-center") $ do
-      el "h5" (text "Telefone:")
-      el "h5" (dynText $ fmap clienteTelefone dynCli)
-    elAttr "div" ("class" =: "d-flex flex-row align-items-center") $ do
-      el "h5" (text "CPF:")
-      el "h5" (dynText $ fmap clienteCpf dynCli)
-    elAttr "div" ("class" =: "d-flex flex-row align-items-center") $ do
-      el "h5" (text "Endereco:")
-      el "h5" (dynText $ fmap clienteEndereco dynCli)
-    (btn,_) <- elAttr' "button" ("class" =: "btn btn-danger") (text "Voltar")
-    let ret = domEvent Click btn
-    return ("Perfil: " <> (T.pack $ show pid), reqClienteLista <$ ret)
 
 reqCliente :: (DomBuilder t m, Prerender js t m) => m ()
 reqCliente = do
@@ -141,15 +248,17 @@ tabCliente cl = do
     el "td" (dynText $ fmap clienteTelefone cl)
     el "td" (dynText $ fmap clienteCpf cl)
     el "td" (dynText $ fmap clienteEndereco cl)
-    (btn,_) <- elAttr' "button" ("class" =: "btn btn-primary" <> "style" =: "background: #0d6efd;") (text "Perfil")
+    (btn,_) <- elAttr' "button" ("class" =: "btn btn-primary" <> "style" =: "background: #0d6efd;") (text "Agendar")
     let evt = (fmap (const PerfilCliente)) (domEvent Click btn)
     (btn,_) <- elAttr' "button" ("class" =: "btn btn-warning" <> "style" =: "background: #ffc107; margin-left: 15px;") (text "Editar")
     let evt2 = (fmap (const EditarCliente)) (domEvent Click btn)
-    return (attachPromptlyDynWith (flip ($)) (fmap codigoCliente cl) (leftmost [evt, evt2]))
+    (btn,_) <- elAttr' "button" ("class" =: "btn btn-danger" <> "style" =: "background: #dc3545; margin-left: 15px;") (text "Excluir")
+    let evt3 = (fmap (const Excluir)) (domEvent Click btn)
+    return (attachPromptlyDynWith (flip ($)) (fmap codigoCliente cl) (leftmost [evt, evt2,evt3]))
 
 reqClienteLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Workflow t m T.Text
 reqClienteLista = Workflow $ do
-  elAttr "div" ("class" =: "col-6 d-flex justify-content-center flex-column") $ do
+  elAttr "div" ("class" =: "col-12 d-flex justify-content-center flex-column") $ do
     (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Listar")
     let click = domEvent Click btn
     clients :: Dynamic t (Event t (Maybe [Cliente])) <- prerender
@@ -172,111 +281,59 @@ reqClienteLista = Workflow $ do
     tb' <- return $ switchDyn $ fmap leftmost tb
     return ("Listagem", escolherPag <$> tb')
     where
-      escolherPag (PerfilCliente pid) = pagPerfilCliente pid
+      escolherPag (PerfilCliente pid) = pagAgendar pid
       escolherPag (EditarCliente pid) = editarPerfilCliente pid
+      escolherPag (Excluir pid) = pagExcluirCliente pid
 
-editarPerfilServico :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
-editarPerfilServico pid = Workflow $ do
-  (btn,_) <- elAttr' "button" ("class" =: "btn btn-primary" <> "style" =: "background: #0d6efd;") (text "Mostrar")
-  let evt = domEvent Click btn
-  serv :: Dynamic t (Event t (Maybe Servicos)) <- prerender
-    (pure never)
-    (fmap decodeXhrResponse <$> performRequestAsync (const (getClienteReq pid) <$> evt))
-  mdyn <- return (switchDyn serv)
-  dynE <- return ((fromMaybe (Servicos 1 0 "" 0)) <$> mdyn)
+reqListaAgend :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => m ()
+reqListaAgend = do 
+    r <- workflow reqAgendamentoLista
+    el "div" (dynText r)
 
-  elAttr "div" ("class" =: "col-3 d-flex flex-column") $ do
-    el "label" (text "Servico")
-    servico <- inputElement $ def & inputElementConfig_setValue .~ (fmap servico dynE)
-    el "label" (text "Valor")
-    valor <-  numberInputDyn (fmap valor dynE)
-
-    let servi = fmap(\(s,v) -> Servicos 1 0 s v) (zipDyn (_inputElement_value servico)  valor)
-    (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Editar")
-    let submitBtn = domEvent Click btn
-    let servEvt = tag (current servi) submitBtn
-    _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
-        (pure never)
-        (fmap decodeXhrResponse <$>
-                performRequestAsync (sendRequest (BackendRoute_ServicosEditar :/ pid)
-                <$> servEvt))
-    return ("Editar: " <> (T.pack $ show pid), reqServicoLista <$ submitBtn)  
-
-
-reqListaService :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => m ()
-reqListaService = do
-  r <- workflow reqServicoLista
-  el "div" (dynText r)
-
-pagPerfilServico :: ( DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
-pagPerfilServico pid = Workflow $ do
-  (btn,_) <- elAttr' "button" ("class" =: "btn btn-primary" <> "style" =: "background: #0d6efd;") (text "Mostrar")
-  let evt = domEvent Click btn
-  prod :: Dynamic t (Event t (Maybe Servicos)) <- prerender
-    (pure never)
-    (fmap decodeXhrResponse <$> performRequestAsync (const (getServicosReq pid) <$> evt))
-  mdyn <- holdDyn Nothing (switchDyn prod)
-  dynServ <- return ((fromMaybe (Servicos 1 0 "" 0)) <$> mdyn)
-  el "div" $ do
-    elAttr "div" ("class" =: "d-flex flex-row align-items-center") $ do
-      el "h5" (text "Servico:")
-      el "h5" (dynText $ fmap servico dynServ)
-    elAttr "div" ("class" =: "d-flex flex-row align-items-center") $ do
-      el "h5" (text "Valor:")
-      el "h5" (dynText $ fmap(T.pack . show . valor) dynServ)
-    (btn,_) <- elAttr' "button" ("class" =: "btn btn-danger") (text "Voltar")
-    let ret = domEvent Click btn
-    return ("Perfil: " <> (T.pack $ show pid), reqServicoLista <$ ret)
-
-
-reqServicos :: (DomBuilder t m, Prerender js t m) => m ()
-reqServicos = do
-  serv <- inputElement def
-  vl <- numberInput
-  let servi = fmap(\(s,v) -> Servicos 1 0 s v) (zipDyn (_inputElement_value serv)  vl)
-  (submitBtn,_) <- el' "button" (text "Inserir")
-  let click = domEvent Click submitBtn
-  let servicosEvt = tag (current servi) click
-  _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
-      (pure never)
-      (fmap decodeXhrResponse <$> performRequestAsync (sendRequest(BackendRoute_Servicos :/ ()) <$> servicosEvt ))
-  return()
-
-
-
-tabServicos :: (PostBuild t m, DomBuilder t m) => Dynamic t Servicos -> m (Event t Acao)
-tabServicos sr = do
+tabAgendamento :: (PostBuild t m, DomBuilder t m) => Dynamic t Agendamento -> m (Event t Acao)
+tabAgendamento ag = do
   el "tr" $ do
-    el "td" (dynText $ fmap servico sr)
-    el "td" (dynText $ fmap (T.pack . show . valor) sr)
-    (btn,_) <- elAttr' "button" ("class" =: "btn btn-primary" <> "style" =: "background: #0d6efd;") (text "Perfil")
-    let evt = (fmap (const PerfilServico)) (domEvent Click btn)
-    (btn,_) <- elAttr' "button" ("class" =: "btn btn-warning" <> "style" =: "background: #ffc107; margin-left: 15px;") (text "Editar")
-    let evt2 = (fmap (const EditarServico)) (domEvent Click btn)
-    return (attachPromptlyDynWith (flip ($)) (fmap codigoServico sr) (leftmost [evt, evt2]))
+    el "td" (dynText $ fmap (T.pack . show . codigoServicoAgendemento) ag)
+    el "td" (dynText $ fmap nomeAgendamento ag)
+    el "td" (dynText $ fmap telefoneAgendamento ag)
+    el "td" (dynText $ fmap cpfAgendamento ag)
+    el "td" (dynText $ fmap enderecoAgendamento ag)
+    el "td" (dynText $ fmap servicoAgendamento ag)
+    el "td" (dynText $ fmap dataAgendamento ag)
+    el "td" (dynText $ fmap(T.pack . show . valorAgendamento) ag)
+    (btn,_) <- elAttr' "button" ("class" =: "btn btn-danger" <> "style" =: "background: #dc3545; margin-bottom: 10px;") (text "Excluir")
+    let evt2 = (fmap (const Excluir)) (domEvent Click btn)
+    return (attachPromptlyDynWith (flip ($)) (fmap codigoServicoAgendemento ag) (leftmost [evt2]))
 
-reqServicoLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Workflow t m T.Text
-reqServicoLista = Workflow $ do
+reqAgendamentoLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Workflow t m T.Text
+reqAgendamentoLista = Workflow $ do
   (btn,_) <- el' "button" (text "Listar")
   let click = domEvent Click btn
-  services :: Dynamic t (Event t (Maybe [Servicos])) <- prerender
+  agend :: Dynamic t (Event t (Maybe [Agendamento])) <- prerender
     (pure never)
-    (fmap decodeXhrResponse <$> performRequestAsync (const getServiceListReq <$> click))
-  evt <- return (fmap (fromMaybe []) $ switchDyn services)
-  dynServ <- foldDyn (++) [] evt
+    (fmap decodeXhrResponse <$> performRequestAsync (const getListReq <$> click))
+  evt <- return (fmap (fromMaybe []) $ switchDyn agend)
+  dynAgenda <- foldDyn (++) [] evt
   tb <- elAttr "table" ("class" =: "table") $ do
     el "thead" $ do
       el "tr" $ do
-        elAttr "th" ("scope" =: "col") (text "Servico")
-        elAttr "th" ("scope" =: "col") (text "valor")
+        elAttr "th" ("scope" =: "col") (text "Codigo Agendamento")
+        elAttr "th" ("scope" =: "col") (text "Nome do Cliente")
+        elAttr "th" ("scope" =: "col") (text "Telefone")
+        elAttr "th" ("scope" =: "col") (text "CPF")
+        elAttr "th" ("scope" =: "col") (text "Endereco")
+        elAttr "th" ("scope" =: "col") (text "servico")
+        elAttr "th" ("scope" =: "col") (text "Data")
+        elAttr "th" ("scope" =: "col") (text "Valor")
 
     el "tbody" $ do
-        simpleList dynServ tabServicos
+      simpleList dynAgenda tabAgendamento
   tb' <- return $ switchDyn $ fmap leftmost tb
   return ("Listagem", escolherPag <$> tb')
   where
-    escolherPag (PerfilServico pid) = pagPerfilServico pid
-    escolherPag (EditarServico pid) = editarPerfilServico pid
+    escolherPag (PerfilCliente pid) = pagPerfilClienteAgendamento pid
+    escolherPag (Excluir pid) = pagExcluirAgendamento pid
+
 
 
 reqUsuario :: ( DomBuilder t m
@@ -303,6 +360,8 @@ tabUsuario us = do
     el "td" (text $ usuarioUsername us)
     el "td" (text $ usuarioSenha us)
 
+
+
 reqUsuarioLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => m ()
 reqUsuarioLista = do
   (btn,_) <- el' "button" (text "Listar")
@@ -322,6 +381,7 @@ reqUsuarioLista = do
     el "tbody" $ do
       dyn_ (fmap sequence (ffor dynUser (fmap tabUsuario)))
 
+
 clickli :: DomBuilder t m => Pagina -> T.Text -> m (Event t Pagina)
 clickli p t = do
   (ev, _) <- elAttr' "li" ("class" =: "nav-item") (elAttr "a" ("href" =: "#" <> "class" =: "nav-link") (text t))
@@ -331,12 +391,11 @@ currPag :: (DomBuilder t m, MonadHold t m, PostBuild t m, MonadFix m, Prerender 
 currPag p = 
   case p of
     Principal -> blank
+    AgendamentoPag -> reqListaAgend
     Usuarios -> reqUsuarioLista
     Clientes -> reqListaClient
-    ServicosPag -> reqListaService
     InsertUser -> reqUsuario
     InsertCli -> reqCliente
-    InsertServ -> reqServicos
 
 homepag :: (DomBuilder t m , PostBuild t m, MonadHold t m,MonadFix m, Prerender js t m) => m ()
 homepag = do
@@ -377,12 +436,14 @@ menu = do
             p1 <- clickli Principal "Teste da Home"
             pu <- clickli Usuarios "Usuarios"
             p2 <- clickli Clientes "Clientes"
-            p3 <- clickli ServicosPag "Servicos"
+            p3 <- clickli AgendamentoPag "Agendamento"
             p4 <- clickli InsertUser "Inserir Usuario"
             p5 <- clickli InsertCli "Inserir Cliente"
             p6 <- clickli InsertServ "Inserir Servicos"
             return (leftmost [p1,pu,p2,p3,p4,p5,p6])
   holdDyn Principal evs
+
+
 
 numberInput :: (Read a, Num a) => DomBuilder t m => m (Dynamic t a)
 numberInput = do
@@ -390,6 +451,16 @@ numberInput = do
         & inputElementConfig_initialValue .~ "0"
         & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("type" =: "number")
       return $ fmap (fromMaybe 0 . readMaybe . T.unpack) $ _inputElement_value n
+numberInputDisable :: (DomBuilder t m, Num a, Read a, Show a) => Event t a -> m (Dynamic t a)
+numberInputDisable p = do
+    val <- return (fmap (T.pack . show) p)
+    n <- inputElement $ def
+      & inputElementConfig_setValue .~ val
+      & inputElementConfig_elementConfig 
+      . elementConfig_initialAttributes .~ ("disabled" =: "teste" <> "type" =: "hidden")
+    return $ fmap (fromMaybe 0 . readMaybe . T.unpack)
+                  (_inputElement_value n)
+
 numberInputDyn :: (DomBuilder t m, Num a, Read a, Show a) => Event t a -> m (Dynamic t a)
 numberInputDyn p = do
     val <- return (fmap (T.pack . show) p)

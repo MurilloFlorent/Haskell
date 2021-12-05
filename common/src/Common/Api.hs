@@ -30,12 +30,20 @@ data Servicos = Servicos {
     cdUsuario :: Int,
     codigoServico :: Int,
     servico :: Text,
-    valor :: Double
+    valor :: Double,
+    date :: Text,
+    idcategoria :: Int
 } deriving (Generic, ToJSON, FromJSON, ToRow, FromRow, Eq, Show)
 
 data Agendamento = Agendamento {
     cdUsuarioAgendamento :: Int,
-    cdCliente :: Int,
-    cdServico :: Int,
-    date :: Text
+    codigoServicoAgendemento :: Int,
+    servicoAgendamento :: Text,
+    valorAgendamento :: Double,
+    dataAgendamento :: Text,
+    idcategoriaAgendamento :: Int,
+    nomeAgendamento :: Text,
+    telefoneAgendamento :: Text,
+    cpfAgendamento :: Text,
+    enderecoAgendamento :: Text
 } deriving (Generic, ToJSON, FromJSON, ToRow, FromRow, Eq, Show)

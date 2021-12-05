@@ -14,11 +14,11 @@ import Data.Aeson.Text
 import Common.Api
 
 getConn :: ConnectInfo
-getConn = ConnectInfo "ec2-54-205-232-84.compute-1.amazonaws.com"
+getConn = ConnectInfo "ec2-34-233-214-228.compute-1.amazonaws.com"
                       5432
-                      "svvgaadgjwwjbb"
-                      "155c4c74a17c9c1d9a7813b4d2617fec49405dd64d1a3072e29033046dd9dd92"
-                      "donred3bpfpg5"
+                      "pdindoopmdpwdk"
+                      "4cd9a084184b8af9302d393f8ad427e7d4ca1b9b7041875f8ff385cd6f08c93d"
+                      "dblkvm4b8s6j0u"
 
 migrationUsuario :: Query
 migrationUsuario = "CREATE TABLE if not exists tb_usuario (codigoUsuario SERIAL PRIMARY KEY ,username TEXT NOT NULL, senha TEXT NOT NULL)"
@@ -27,10 +27,10 @@ migrationCliente :: Query
 migrationCliente = "CREATE TABLE if not exists tb_cliente (cdUsuario INTEGER NOT NULL, codigoCliente SERIAL PRIMARY KEY, nome TEXT NOT NULL, telefone TEXT NOT NULL, cpf TEXT NOT NULL, endereco TEXT NOT NULL, FOREIGN KEY (cdUsuario) REFERENCES TB_usuario (codigoUsuario) ON DELETE CASCADE)"
 
 migrationServicos :: Query
-migrationServicos = "CREATE TABLE if not exists tb_servicos (cdUsuario INTEGER NOT NULL, codigoServico SERIAL PRIMARY KEY, servico TEXT NOT NULL, valor REAL NOT NULL, FOREIGN KEY (cdUsuario) REFERENCES tb_usuario (codigoUsuario) ON DELETE CASCADE)"
+migrationServicos = "CREATE TABLE if not exists tb_servicos (cdUsuario INTEGER NOT NULL, codigoServico SERIAL PRIMARY KEY, servico TEXT NOT NULL, valor REAL NOT NULL,data TEXT, idCategoria INTEGER, FOREIGN KEY (cdUsuario) REFERENCES tb_usuario (codigoUsuario) ON DELETE CASCADE)"
 
 migrationAgendamento :: Query
-migrationAgendamento = "CREATE TABLE if not exists tb_agendamento (cdUsuario INTEGER NOT NULL, cdCliente INTEGER NOT NULL, cdServico INTEGER NOT NULL, horario DATE, FOREIGN KEY (cdUsuario) REF0ERENCES tb_usuario (codigoUsuario) ON DELETE CASCADE,FOREIGN KEY (cdCliente) REFERENCES tb_cliente (codigoCliente) ON DELETE CASCADE,FOREIGN KEY (cdServico) REFERENCES tb_servicos (codigoServico) ON DELETE CASCADE)"
+migrationAgendamento = "CREATE TABLE if not exists tb_agendamento (cdAgendamento SERIAL PRIMARY KEY, cdUsuario INTEGER NOT NULL, cdCliente INTEGER NOT NULL, servico TEXT NOT NULL, valor REAL NOT NULL, data DATE,  FOREIGN KEY (cdUsuario) REFERENCES tb_usuario (codigoUsuario) ON DELETE CASCADE)"
 
 backend :: Backend BackendRoute FrontendRoute
 backend = Backend
@@ -47,10 +47,28 @@ backend = Backend
                         writeLazyText (encodeToLazyText (Prelude.head res))
                 else 
                         modifyResponse $ setResponseStatus 404 "NOT FOUND"
+            BackendRoute_ClienteDeletar :/ pid -> do
+                res :: [Cliente] <- liftIO $ do
+                        execute_ dbcon migrationCliente
+                        query dbcon "DELETE FROM tb_cliente where codigoCliente = ?" (Only (pid :: Int))
+                if res /= [] then do
+                        modifyResponse $ setResponseStatus 200 "OK"   
+                        writeLazyText (encodeToLazyText (Prelude.head res))
+                else 
+                        modifyResponse $ setResponseStatus 404 "NOT FOUND"
             BackendRoute_ServicosBuscar :/ pid -> do
                 res :: [Servicos] <- liftIO $ do
                         execute_ dbcon migrationCliente
-                        query dbcon "SELECT * FROM tb_servicos where codigoServico = ?" (Only (pid :: Int))
+                        query dbcon "select * from tb_servicos as a inner join tb_cliente on idcategoria = codigocliente where codigoservico = ?" (Only (pid :: Int))
+                if res /= [] then do
+                        modifyResponse $ setResponseStatus 200 "OK"   
+                        writeLazyText (encodeToLazyText (Prelude.head res))
+                else 
+                        modifyResponse $ setResponseStatus 404 "NOT FOUND"
+            BackendRoute_ServicosDeletar :/ pid -> do
+                res :: [Servicos] <- liftIO $ do
+                        execute_ dbcon migrationCliente
+                        query dbcon "DELETE FROM tb_servicos where codigoServico = ?" (Only (pid :: Int))
                 if res /= [] then do
                         modifyResponse $ setResponseStatus 200 "OK"   
                         writeLazyText (encodeToLazyText (Prelude.head res))
@@ -81,9 +99,9 @@ backend = Backend
               modifyResponse $ setResponseStatus 200 "OK"
               writeLazyText (encodeToLazyText res)
             BackendRoute_ServicosListar :/ () -> method GET $ do
-              res :: [Servicos] <- liftIO $ do
+              res :: [Agendamento] <- liftIO $ do
                 execute_ dbcon migrationServicos
-                query_ dbcon "SELECT * from tb_servicos"
+                query_ dbcon "select a.cdusuario,a.codigoservico, a.servico, a.valor, a.data, a.idcategoria, b.nome, b.telefone, b.cpf, b.endereco from tb_servicos as a inner join tb_cliente as b on a.idcategoria = b.codigocliente"
               modifyResponse $ setResponseStatus 200 "OK"
               writeLazyText (encodeToLazyText res)
             BackendRoute_ClienteListar :/ () -> method GET $ do
@@ -117,7 +135,7 @@ backend = Backend
                 Just servicos -> do
                   liftIO $ do
                     execute_ dbcon migrationServicos
-                    execute dbcon "INSERT INTO tb_servicos (cdUsuario, servico, valor) VALUES (?,?,?)" (cdUsuario servicos, servico servicos, valor servicos)
+                    execute dbcon "INSERT INTO tb_servicos (cdUsuario, servico, valor,data,idcategoria) VALUES (?,?,?,?,?)" (cdUsuario servicos, servico servicos, valor servicos, date servicos, idcategoria servicos)
                   modifyResponse $ setResponseStatus 200 "OK"
                 Nothing -> modifyResponse $ setResponseStatus 500 "error" 
             _ -> return ()
