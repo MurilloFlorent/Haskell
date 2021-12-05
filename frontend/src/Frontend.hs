@@ -26,7 +26,7 @@ import Common.Route
 -- `prerender` functions.
 
 
-data Pagina = Principal | Usuarios | Clientes | AgendamentoPag | InsertUser | InsertCli | InsertServ
+data Pagina = Principal | InsertCli | Clientes | AgendamentoPag | InsertUser 
 data Acao = PerfilCliente Int | EditarCliente Int | PerfilServico Int | EditarServico Int | Excluir Int
 
 
@@ -76,7 +76,7 @@ editarPerfilCliente pid = Workflow $ do
     telefone <-  inputElement $ def & inputElementConfig_setValue .~ (fmap clienteTelefone dynE)
     el "label" (text "Cpf")
     cpf <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteCpf dynE)
-    el "label" (text "Endereco")
+    el "label" (text "Endereço")
     endereco <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteEndereco dynE) 
   
     let cliente = fmap (\((n,t),(c,e)) -> Cliente  1 0 n t c e) (zipDyn (zipDyn (_inputElement_value nome)(_inputElement_value telefone)) (zipDyn (_inputElement_value cpf)(_inputElement_value endereco)))
@@ -111,17 +111,17 @@ pagAgendar pid = Workflow $ do
       telefone <-  inputElement $ def & inputElementConfig_setValue .~ (fmap clienteTelefone dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
       el "label" (text "Cpf")
       cpf <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteCpf dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
-      el "label" (text "Endereco")
+      el "label" (text "Endereço")
       endereco <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteEndereco dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
       id <- numberInputDisable (fmap codigoCliente dynE)
         
       elAttr "div" ("class" =: "col-6 d-flex flex-column") $ do
         el "h3" (text "Agendamento")
-        el "label" (text "Servico")
+        el "label" (text "Serviço")
         serv <- inputElement def
         el "label" (text "Valor")
         vl <- numberInput
-        el "label" (text "Data do Servico")
+        el "label" (text "Data do Serviço")
         date <- inputElement $ def & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("type" =: "date")
           
 
@@ -154,7 +154,7 @@ pagPerfilCliente pid = Workflow $ do
     telefone <-  inputElement $ def & inputElementConfig_setValue .~ (fmap clienteTelefone dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
     el "label" (text "Cpf")
     cpf <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteCpf dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
-    el "label" (text "Endereco")
+    el "label" (text "Endereço")
     endereco <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteEndereco dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
     id <- numberInputDisable (fmap codigoCliente dynE)   
     
@@ -180,7 +180,7 @@ pagPerfilClienteAgendamento pid = Workflow $ do
     telefone <-  inputElement $ def & inputElementConfig_setValue .~ (fmap clienteTelefone dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
     el "label" (text "Cpf")
     cpf <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteCpf dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
-    el "label" (text "Endereco")
+    el "label" (text "Endereço")
     endereco <- inputElement $ def & inputElementConfig_setValue .~ (fmap clienteEndereco dynE) & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("disabled" =: "teste")
     id <- numberInputDisable (fmap codigoCliente dynE)   
     
@@ -228,18 +228,23 @@ reqListaClient = do
 
 reqCliente :: (DomBuilder t m, Prerender js t m) => m ()
 reqCliente = do
-  nome <- inputElement def
-  telefone <- inputElement def
-  cpf <- inputElement def
-  endereco <- inputElement def
-  let cliente = fmap (\((n,t),(c,e)) -> Cliente  1 0 n t c e) (zipDyn (zipDyn (_inputElement_value nome)(_inputElement_value telefone)) (zipDyn (_inputElement_value cpf)(_inputElement_value endereco)))
-  (submitBtn,_) <- el' "button" (text "Inserir")
-  let click = domEvent Click submitBtn
-  let clienteEvt = tag (current cliente) click
-  _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
-      (pure never)
-      (fmap decodeXhrResponse <$> performRequestAsync (sendRequest (BackendRoute_Cliente :/ ()) <$> clienteEvt ))
-  return()
+  elAttr "div" ("class" =: "col-4 d-flex flex-column") $ do
+    el "label" (text "Nome: ")
+    nome <- inputElement def
+    el "label" (text "Telefone: ")
+    telefone <- inputElement def
+    el "label" (text "CPF: ")
+    cpf <- inputElement def
+    el "label" (text "endereço: ")
+    endereco <- inputElement def
+    let cliente = fmap (\((n,t),(c,e)) -> Cliente  1 0 n t c e) (zipDyn (zipDyn (_inputElement_value nome)(_inputElement_value telefone)) (zipDyn (_inputElement_value cpf)(_inputElement_value endereco)))
+    (submitBtn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Inserir")
+    let click = domEvent Click submitBtn
+    let clienteEvt = tag (current cliente) click
+    _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
+        (pure never)
+        (fmap decodeXhrResponse <$> performRequestAsync (sendRequest (BackendRoute_Cliente :/ ()) <$> clienteEvt ))
+    return  ()
 
 tabCliente :: (PostBuild t m, DomBuilder t m) => Dynamic t Cliente -> m (Event t Acao)
 tabCliente cl = do
@@ -258,7 +263,7 @@ tabCliente cl = do
 
 reqClienteLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Workflow t m T.Text
 reqClienteLista = Workflow $ do
-  elAttr "div" ("class" =: "col-12 d-flex justify-content-center flex-column") $ do
+  el "div" $ do
     (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Listar")
     let click = domEvent Click btn
     clients :: Dynamic t (Event t (Maybe [Cliente])) <- prerender
@@ -272,7 +277,7 @@ reqClienteLista = Workflow $ do
           elAttr "th" ("scope" =: "col") (text "Nome")
           elAttr "th" ("scope" =: "col") (text "Telefone")
           elAttr "th" ("scope" =: "col") (text "CPF")
-          elAttr "th" ("scope" =: "col") (text "Endereco")
+          elAttr "th" ("scope" =: "col") (text "Endereço")
           elAttr "th" ("scope" =: "col") (text "")
 
 
@@ -307,7 +312,7 @@ tabAgendamento ag = do
 
 reqAgendamentoLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Workflow t m T.Text
 reqAgendamentoLista = Workflow $ do
-  (btn,_) <- el' "button" (text "Listar")
+  (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Listar")
   let click = domEvent Click btn
   agend :: Dynamic t (Event t (Maybe [Agendamento])) <- prerender
     (pure never)
@@ -321,8 +326,8 @@ reqAgendamentoLista = Workflow $ do
         elAttr "th" ("scope" =: "col") (text "Nome do Cliente")
         elAttr "th" ("scope" =: "col") (text "Telefone")
         elAttr "th" ("scope" =: "col") (text "CPF")
-        elAttr "th" ("scope" =: "col") (text "Endereco")
-        elAttr "th" ("scope" =: "col") (text "servico")
+        elAttr "th" ("scope" =: "col") (text "Endereço")
+        elAttr "th" ("scope" =: "col") (text "Serviço")
         elAttr "th" ("scope" =: "col") (text "Data")
         elAttr "th" ("scope" =: "col") (text "Valor")
 
@@ -344,7 +349,7 @@ reqUsuario = do
     el "label" (text "Usuario") 
     username <- inputElement def
     el "label" (text "Senha") 
-    senha <- inputElement def
+    senha <- inputElement def 
     let user = fmap (\(u,s) -> Usuario 0 u s) (zipDyn (_inputElement_value username)(_inputElement_value  senha))
     (submitBtn,_) <- elAttr' "button" ("class" =: "btn btn-primary mt-2") (text "Inserir")
     let click = domEvent Click submitBtn
@@ -364,7 +369,7 @@ tabUsuario us = do
 
 reqUsuarioLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => m ()
 reqUsuarioLista = do
-  (btn,_) <- el' "button" (text "Listar")
+  (btn,_) <- elAttr' "button" ("class" =: "btn btn-success") (text "Listar")
   let click = domEvent Click btn
   users :: Dynamic t (Event t (Maybe [Usuario])) <- prerender
     (pure never)
@@ -391,11 +396,10 @@ currPag :: (DomBuilder t m, MonadHold t m, PostBuild t m, MonadFix m, Prerender 
 currPag p = 
   case p of
     Principal -> blank
-    AgendamentoPag -> reqListaAgend
-    Usuarios -> reqUsuarioLista
-    Clientes -> reqListaClient
-    InsertUser -> reqUsuario
     InsertCli -> reqCliente
+    Clientes -> reqListaClient
+    AgendamentoPag -> reqListaAgend
+    InsertUser -> reqUsuario
 
 homepag :: (DomBuilder t m , PostBuild t m, MonadHold t m,MonadFix m, Prerender js t m) => m ()
 homepag = do
@@ -425,22 +429,20 @@ prodpag = do
 
 menu :: (DomBuilder t m, MonadHold t m) => m (Dynamic t Pagina)
 menu = do
-  evs <- el "ul" $ do
-    elAttr "nav" ("class" =: "navbar navbar-expand-lg navbar-light bg-light") $ do
+  evs <- elAttr "ul" ("style" =:"background: #e3e3e3;" ) $ do
+    elAttr "nav" ("class" =: "navbar navbar-expand-lg navbar-light bg-light" <> "style" =: "background: #e3e3e3 !important;") $ do
       elAttr "div" ("class" =: "container-fluid") $ do
-        elAttr "a" ("class" =: "navbar-brand" <> "href" =: "#") (text "Navbar")
+        elAttr "a" ("class" =: "navbar-brand" <> "href" =: "#") (text "Projeto")
         elAttr "button" ("class" =: "navbar-toggler" <> "type" =: "button" <> "data-bs-toggle" =:"collapse" <> "data-bs-target" =: "#navbarSupportedContent" <> "aria-controls" =: "navbarSupportedContent" <> "aria-expanded" =: "false" <> "aria-label" =: "Toggle navigation" ) $ do
           elAttr "span" ("class" =: "navbar-toggle-icon") blank
-        elAttr "div" ("class" =: "collapse navbar-collapse" <> "id" =: "navbarSupporedContent") $ do
+        elAttr "div" ("class" =: "navbar-collapse" <> "id" =: "navbarSupporedContent") $ do
           elAttr "ul" ("class" =: "navbar-nav me-auto mb-2 mb-lg-0") $ do
-            p1 <- clickli Principal "Teste da Home"
-            pu <- clickli Usuarios "Usuarios"
-            p2 <- clickli Clientes "Clientes"
-            p3 <- clickli AgendamentoPag "Agendamento"
-            p4 <- clickli InsertUser "Inserir Usuario"
-            p5 <- clickli InsertCli "Inserir Cliente"
-            p6 <- clickli InsertServ "Inserir Servicos"
-            return (leftmost [p1,pu,p2,p3,p4,p5,p6])
+            
+            p2 <- clickli InsertCli "Inserir Cliente"
+            p3 <- clickli Clientes "Clientes"
+            p4 <- clickli AgendamentoPag "Agendamento"
+            p5 <- clickli InsertUser "Inserir Usuario"
+            return (leftmost [p2,p3,p4,p5])
   holdDyn Principal evs
 
 
@@ -475,7 +477,7 @@ numberInputDyn p = do
 frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = do
-      el "title" $ text "Obelisk Minimal Example"
+      el "title" $ text "Projeto de Haskell"
       elAttr "link" ("href" =: static @"main.css" 
               <> "type" =: "text/css" 
               <> "rel" =: "stylesheet") blank
