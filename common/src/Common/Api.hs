@@ -34,6 +34,13 @@ data Servicos = Servicos {
     date :: Text,
     idcategoria :: Int
 } deriving (Generic, ToJSON, FromJSON, ToRow, FromRow, Eq, Show)
+data ServicosEdit = ServicosEdit {
+    cdUsuarioServ :: Int,
+    codigoServicoServ :: Int,
+    servicoName :: Text,
+    valorServ :: Double,
+    dateServ :: Text
+} deriving (Generic, ToJSON, FromJSON, ToRow, FromRow, Eq, Show)
 
 data Agendamento = Agendamento {
     cdUsuarioAgendamento :: Int,

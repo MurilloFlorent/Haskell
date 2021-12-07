@@ -40,6 +40,7 @@ data BackendRoute :: * -> * where
   BackendRoute_UsuarioListar :: BackendRoute ()
   BackendRoute_Servicos :: BackendRoute ()
   BackendRoute_ClienteBuscar :: BackendRoute Int
+  BackendRoute_ServicosBuscar2 :: BackendRoute Int
   BackendRoute_ClienteEditar :: BackendRoute Int
   BackendRoute_ServicosBuscar :: BackendRoute Int
   BackendRoute_ServicosEditar :: BackendRoute Int
@@ -69,6 +70,7 @@ fullRouteEncoder = mkFullRouteEncoder
       BackendRoute_ClienteEditar -> PathSegment "clienteEditar" readShowEncoder
       BackendRoute_ServicosBuscar -> PathSegment "servicosBuscar" readShowEncoder
       BackendRoute_ServicosEditar -> PathSegment "servicosEditar" readShowEncoder
+      BackendRoute_ServicosBuscar2 -> PathSegment "servicobusca" readShowEncoder
       BackendRoute_ClienteDeletar -> PathSegment "clienteDeletar" readShowEncoder
       BackendRoute_ServicosDeletar -> PathSegment "servicosDeletar" readShowEncoder
       

@@ -27,7 +27,7 @@ import Common.Route
 
 
 data Pagina = Principal | InsertCli | Clientes | AgendamentoPag | InsertUser 
-data Acao = PerfilCliente Int | EditarCliente Int | PerfilServico Int | EditarServico Int | Excluir Int
+data Acao = PerfilCliente Int | EditarCliente Int | PerfilServico Int | EditarAgenda Int | Excluir Int
 
 
 getPath :: R BackendRoute ->  T.Text
@@ -57,6 +57,9 @@ getExcluirAgendamento pid = xhrRequest "GET" (getPath (BackendRoute_ServicosDele
 
 getAgendamentosReq :: Int -> XhrRequest()
 getAgendamentosReq pid = xhrRequest "GET" (getPath (BackendRoute_ServicosBuscar :/ pid)) def
+
+getServicoReq :: Int -> XhrRequest()
+getServicoReq pid = xhrRequest "GET" (getPath (BackendRoute_ServicosBuscar2 :/ pid)) def
 
 
 editarPerfilCliente :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
@@ -136,6 +139,39 @@ pagAgendar pid = Workflow $ do
                   <$> clientEvt))
         
         return ("Editar: " <> (T.pack $ show pid), reqAgendamentoLista <$ submitBtn) 
+
+editarAgendamento :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
+editarAgendamento pid = Workflow $ do
+  (btn,_) <- elAttr' "button" ("class" =: "btn btn-primary" <> "style" =: "background: #0d6efd;") (text "Mostrar")
+  let evt = domEvent Click btn
+  cli :: Dynamic t (Event t (Maybe Servicos)) <- prerender
+    (pure never)
+    (fmap decodeXhrResponse <$> performRequestAsync (const (getServicoReq pid) <$> evt))
+  mdyn <- return (switchDyn cli)
+  dynE <- return ((fromMaybe (Servicos 1 0 "" 0 "" 0)) <$> mdyn)
+
+  elAttr "div" ("class" =: "col-6 d-flex flex-column") $ do
+        el "h3" (text "Agendamento")
+        el "label" (text "Serviço")
+        serv <- inputElement $ def $ inputElementConfig_setValue .~ (fmap servico dynE)
+        el "label" (text "Valor")
+        vl <- numberInputDyn (fmap valor dynE) 
+        el "label" (text "Data do Serviço")
+        date <- inputElement $ def & inputElementConfig_elementConfig . elementConfig_initialAttributes .~ ("type" =: "date")
+        cdserv <- numberInputDisable (fmap codigoServico dynE)
+  
+        let agend = fmap (\((s,v),(d,i))  -> Servicos  1 0 s v d i) (zipDyn  (zipDyn (_inputElement_value serv) (vl))  (zipDyn (_inputElement_value date)(cdserv)))  
+        (btn,_) <- elAttr' "button" ("class" =: "btn btn-success mt-3") (text "Agendar")
+        let submitBtn = domEvent Click btn
+        let clientEvt = tag (current agend) submitBtn
+        _ :: Dynamic t (Event t (Maybe T.Text)) <- prerender
+          (pure never)
+          (fmap decodeXhrResponse <$>
+                performRequestAsync (sendRequest (BackendRoute_ClienteEditar :/ pid)
+                    <$> clientEvt))
+
+        return ("Editar: " <> (T.pack $ show pid), reqClienteLista <$ submitBtn)
+
 
 pagPerfilCliente :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Int -> Workflow t m T.Text
 pagPerfilCliente pid = Workflow $ do
@@ -306,9 +342,11 @@ tabAgendamento ag = do
     el "td" (dynText $ fmap servicoAgendamento ag)
     el "td" (dynText $ fmap dataAgendamento ag)
     el "td" (dynText $ fmap(T.pack . show . valorAgendamento) ag)
-    (btn,_) <- elAttr' "button" ("class" =: "btn btn-danger" <> "style" =: "background: #dc3545; margin-bottom: 10px;") (text "Excluir")
+    (btn,_) <- elAttr' "button" ("class" =: "btn btn-warning" <> "style" =: "background: #ffc107; margin-left: 15px;") (text "Editar")
+    let evt = (fmap (const EditarAgenda)) (domEvent Click btn)
+    (btn,_) <- elAttr' "button" ("class" =: "btn btn-danger" <> "style" =: "background: #dc3545; margin-bottom: 10px; margin-left: 15px;") (text "Excluir")
     let evt2 = (fmap (const Excluir)) (domEvent Click btn)
-    return (attachPromptlyDynWith (flip ($)) (fmap codigoServicoAgendemento ag) (leftmost [evt2]))
+    return (attachPromptlyDynWith (flip ($)) (fmap codigoServicoAgendemento ag) (leftmost [evt,evt2]))
 
 reqAgendamentoLista :: (DomBuilder t m, Prerender js t m, MonadHold t m, MonadFix m, PostBuild t m) => Workflow t m T.Text
 reqAgendamentoLista = Workflow $ do
@@ -336,7 +374,7 @@ reqAgendamentoLista = Workflow $ do
   tb' <- return $ switchDyn $ fmap leftmost tb
   return ("Listagem", escolherPag <$> tb')
   where
-    escolherPag (PerfilCliente pid) = pagPerfilClienteAgendamento pid
+    escolherPag (EditarAgenda pid) = editarAgendamento pid
     escolherPag (Excluir pid) = pagExcluirAgendamento pid
 
 
@@ -432,7 +470,7 @@ menu = do
   evs <- elAttr "ul" ("style" =:"background: #e3e3e3;" ) $ do
     elAttr "nav" ("class" =: "navbar navbar-expand-lg navbar-light bg-light" <> "style" =: "background: #e3e3e3 !important;") $ do
       elAttr "div" ("class" =: "container-fluid") $ do
-        elAttr "a" ("class" =: "navbar-brand" <> "href" =: "#") (text "Projeto")
+        elAttr "a" ("class" =: "navbar-brand" <> "href" =: "#") (text "AgendaDeServiços.com")
         elAttr "button" ("class" =: "navbar-toggler" <> "type" =: "button" <> "data-bs-toggle" =:"collapse" <> "data-bs-target" =: "#navbarSupportedContent" <> "aria-controls" =: "navbarSupportedContent" <> "aria-expanded" =: "false" <> "aria-label" =: "Toggle navigation" ) $ do
           elAttr "span" ("class" =: "navbar-toggle-icon") blank
         elAttr "div" ("class" =: "navbar-collapse" <> "id" =: "navbarSupporedContent") $ do
@@ -477,7 +515,7 @@ numberInputDyn p = do
 frontend :: Frontend (R FrontendRoute)
 frontend = Frontend
   { _frontend_head = do
-      el "title" $ text "Projeto de Haskell"
+      el "title" $ text "AgendaDeServiços.com"
       elAttr "link" ("href" =: static @"main.css" 
               <> "type" =: "text/css" 
               <> "rel" =: "stylesheet") blank
